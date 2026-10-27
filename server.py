@@ -3,15 +3,29 @@ import socket, threading
 HOST = "127.0.0.1" # localhost
 PORT = 7777
 
+
+HAND = ""
+VOICE = ""
+
 def handle_client(conn, addr):
-	while True:
+	command = 0
+	while command < 2:
 		try:
 			data = conn.recv(1024)
 			if not data:
 				break
-			print(f"Received : {data.decode()}")
+			message = data.decode()
+			print(f"Received : {message}")
 			conn.sendall(f"Server response: {data.decode()}"
 				.encode())
+
+			if message.lower().contains("voice"):
+				VOICE = message
+			elif message.lower().contains("gesture"):
+				HAND = message
+
+			command = command + 1
+
 		except ConnectionResetError:
 			print(f"Client has disconnected.")
 	conn.close()

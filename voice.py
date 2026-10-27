@@ -52,6 +52,7 @@ def send_info_server():
 				if not is_command(message):
 					message = ""
 	
+			message = "voice: " + message
 			client_socket.sendall(message.encode())  # Send the message to the server
 			data = client_socket.recv(1024)  # Receive the response from the server
 			print(f"Server response: {data.decode()}")

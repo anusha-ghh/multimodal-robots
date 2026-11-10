@@ -1,0 +1,53 @@
+
+voice,gesture,label
+increase,Thumbs up,increase_vol
+increase volume,Thumbs up,increase_vol
+turn it up,Thumbs up,increase_vol
+make it louder,Thumbs up,increase_vol
+louder please,Thumbs up,increase_vol
+raise the volume,Thumbs up,increase_vol
+increase the sound,Thumbs up,increase_vol
+volume up,Thumbs up,increase_vol
+decrease,Thumbs down,decrease_vol
+decrease volume,Thumbs down,decrease_vol
+turn it down,Fist,decrease_vol
+make it quieter,Fist,decrease_vol
+lower the volume,Thumbs down,decrease_vol
+reduce the sound,Fist,decrease_vol
+volume down,Thumbs down,decrease_vol
+quieter please,Fist,decrease_vol
+go to kitchen,Point,go_to
+go to bedroom,Point,go_to
+go to the living room,Point,go_to
+move to kitchen,Point,go_to
+navigate to bedroom,Point,go_to
+move over there,Point,go_to
+go over there,Point,go_to
+head to the kitchen,Point,go_to
+play music,Peace,play_music
+start music,Pinky finger,play_music
+play something,Pinky and ring finger,play_music
+put on some music,Peace,play_music
+I'd like music,Pinky finger,play_music
+play a song,Pinky and ring finger,play_music
+turn on music,Peace,play_music
+start playing music,Pinky finger,play_music
+hello,Open palm,greet
+hi,Open palm,greet
+hey robot,Thumb left,greet
+good morning,Thumb right,greet
+good afternoon,Open palm,greet
+greetings,Thumb left,greet
+nice to see you,Thumb right,greet
+how are you,Open palm,greet
+hey there,Thumb left,greet
+good evening,Thumb right,greet
+hello there,Open palm,greet
+what's up,Thumb left,greet
+hi robot,Thumb right,greet
+welcome,Open palm,greet
+hey,Thumb left,greet
+nice meeting you,Thumb right,greet
+how's it going,Open palm,greet
+greetings robot,Thumb left,greet
+

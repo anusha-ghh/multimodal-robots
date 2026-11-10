@@ -24,11 +24,12 @@ def listen():
 			mic.adjust_for_ambient_noise(source, duration=1)
 			print(f"Adjusted for ambient noise.")
 			audio = mic.listen(
-				source,
-				timeout=listen_limit,
-				phrase_time_limit = phrase_limit)
+					source,
+					timeout=listen_limit,
+					phrase_time_limit = phrase_limit)
 			text = mic.recognize_google(audio)
 			text = text.lower()
+			print(f"Said {text}")
 			return text
 	except Exception as e:
 			print(f"Could not understand : {e}")
@@ -40,22 +41,21 @@ def send_info_server():
 	send the text to the server.
 	"""
 	with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
-		client_socket.connect((HOST, PORT))  
-        
+		client_socket.connect((HOST, PORT))
 		while True:
 			message = listen()
 
 			if not message:
-                                continue
+				continue
 
-                        if not message == "quit":
-                                break
+			if message == "quit":
+				break
 
-                        if is_command(message):
-                                message = "voice:" + message + "\n"
-                                client_socket.sendall(message.encode())# send
-                                data = client_socket.recv(1024)  # response
-        print("Voice disconnected.")
+			if is_command(message):
+				message = "voice:" + message + "\n"
+				client_socket.sendall(message.encode())# send
+				data = client_socket.recv(1024)  # response
+	print("Voice disconnected.")
 
 
 if __name__ == "__main__":

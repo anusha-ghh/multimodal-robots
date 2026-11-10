@@ -49,6 +49,27 @@ def ensure_model():
             "connection and try again."
         )
 
+def get_thumb_direction(landmarks):
+    """
+    Estimate thumb direction using the thumb tip and MCP joint.
+    """
+    thumb_tip = landmarks[4]
+    thumb_mcp = landmarks[2]
+
+    dx = thumb_tip.x - thumb_mcp.x
+    dy = thumb_tip.y - thumb_mcp.y
+
+    # estimate dominant direction
+    if abs(dy) > abs(dx):
+        if dy < 0:
+            return "Thumbs up"
+        else:
+            return "Thumbs down"
+    else:
+        if dx < 0:
+            return "Thumb left"
+        else:
+            return "Thumb right"
 
 def count_fingers(landmarks, handedness):
     """
@@ -71,24 +92,37 @@ def count_fingers(landmarks, handedness):
     return fingers
 
 
-def recognize_gesture(fingers):
+def recognize_gesture(fingers, landmarks):
     """
     Map a finger-extension pattern to a simple gesture label.
     """
     count = sum(fingers)
 
+
+    # thumb direction
+    if fingers[0] and count == 1:
+        return get_thumb_direction(landmarks)
+
+    # decrease volume
     if count == 0:
         return "Fist"
+
+    # greet
     if count == 5:
         return "Open palm"
+
+    # go to
     if fingers == [False, True, False, False, False]:
-        return "Pointing"
+        return "Point"
+
+    # play music
     if fingers == [False, True, True, False, False]:
         return "Peace"
-    if fingers == [True, True, False, False, True]:
-        return "I love you"
-    if fingers == [True, False, False, False, False]:
-        return "Thumb only"
+    if fingers == [False, False, False, False, True]:
+        return "Pinky finger"
+    if fingers == [False, False, False, True, True]:
+        return "Pinky and ring finger"
+
     return f"{count} finger(s) extended"
 
 
@@ -197,7 +231,7 @@ def main():
                             handedness
                         )
 
-                        gesture = recognize_gesture(fingers)
+                        gesture = recognize_gesture(fingers, landmarks)
 
                         current_gesture = (
                             f"{handedness}|{gesture}"

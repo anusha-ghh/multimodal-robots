@@ -43,19 +43,19 @@ def send_info_server():
 		client_socket.connect((HOST, PORT))  
         
 		while True:
-			message = ""
-			while (message == ""):
-				message = listen()		
-				if message.lower() == 'exit':
-					# print("Closing the connection...")
-					break
-				if not is_command(message):
-					message = ""
-	
-			message = "voice: " + message
-			client_socket.sendall(message.encode())  # Send the message to the server
-			data = client_socket.recv(1024)  # Receive the response from the server
-			print(f"Server response: {data.decode()}")
+			message = listen()
+
+			if not message:
+                                continue
+
+                        if not message == "quit":
+                                break
+
+                        if is_command(message):
+                                message = "voice:" + message + "\n"
+                                client_socket.sendall(message.encode())# send
+                                data = client_socket.recv(1024)  # response
+        print("Voice disconnected.")
 
 
 if __name__ == "__main__":

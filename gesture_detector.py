@@ -3,14 +3,13 @@
 
 from pathlib import Path
 from urllib.request import urlretrieve
-import time
+import time, socket
 
 import cv2
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
-# MediaPipe Tasks needs a separate model file.
 MODEL_PATH = Path(__file__).with_name("hand_landmarker.task")
 MODEL_URL = (
     "https://storage.googleapis.com/mediapipe-models/hand_landmarker/"
@@ -20,7 +19,7 @@ MODEL_URL = (
 TIP_IDS = [4, 8, 12, 16, 20]
 FINGER_NAMES = ["Thumb", "Index", "Middle", "Ring", "Pinky"]
 
-# Landmark connections used to draw the hand skeleton.
+# hand skeleton
 HAND_CONNECTIONS = [
     (0, 1), (1, 2), (2, 3), (3, 4),
     (0, 5), (5, 6), (6, 7), (7, 8),
@@ -30,13 +29,16 @@ HAND_CONNECTIONS = [
     (0, 17),
 ]
 
+HOST = "127.0.0.1"
+PORT = 7777
 
 def ensure_model():
-    """Download the official hand landmark model if it is not present."""
+    """
+    Download the official hand landmark model if it is not present.
+    """
     if MODEL_PATH.exists():
         return
 
-    print("Downloading the MediaPipe hand landmark model...")
     try:
         urlretrieve(MODEL_URL, MODEL_PATH)
     except Exception:
@@ -49,7 +51,9 @@ def ensure_model():
 
 
 def count_fingers(landmarks, handedness):
-    """Estimate which fingers are extended from normalized hand landmarks."""
+    """
+    Estimate which fingers are extended from normalized hand landmarks.
+    """
     fingers = []
 
     # The camera image is mirrored. This thumb heuristic may need adjustment
@@ -68,7 +72,9 @@ def count_fingers(landmarks, handedness):
 
 
 def recognize_gesture(fingers):
-    """Map a finger-extension pattern to a simple gesture label."""
+    """
+    Map a finger-extension pattern to a simple gesture label.
+    """
     count = sum(fingers)
 
     if count == 0:
@@ -87,7 +93,9 @@ def recognize_gesture(fingers):
 
 
 def draw_hand(frame, landmarks):
-    """Draw landmark points and connecting lines on the webcam frame."""
+    """
+    Draw landmark points and connecting lines on the webcam frame.
+    """
     height, width = frame.shape[:2]
     points = [
         (int(lm.x * width), int(lm.y * height))
@@ -103,12 +111,14 @@ def draw_hand(frame, landmarks):
         radius = 6 if i in TIP_IDS else 4
         cv2.circle(frame, point, radius, (0, 220, 80), -1, cv2.LINE_AA)
 
-
 def main():
+
     ensure_model()
 
     options = vision.HandLandmarkerOptions(
-        base_options=python.BaseOptions(model_asset_path=str(MODEL_PATH)),
+        base_options=python.BaseOptions(
+            model_asset_path=str(MODEL_PATH)
+        ),
         running_mode=vision.RunningMode.VIDEO,
         num_hands=2,
         min_hand_detection_confidence=0.6,
@@ -117,99 +127,136 @@ def main():
     )
 
     cap = cv2.VideoCapture(0)
+
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
     if not cap.isOpened():
-        print("Could not open webcam. Check camera access and try again.")
+        print("Could not open webcam.")
         return
 
     start_time = time.monotonic()
     last_timestamp_ms = -1
 
+    last_sent_gesture = None
+
     try:
-        with vision.HandLandmarker.create_from_options(options) as detector:
-            print("Hand gesture recognition started. Press Q or Esc to quit.")
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client_socket:
 
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    print("Could not read a webcam frame.")
-                    break
+            client_socket.connect((HOST, PORT))
 
-                # Mirror the view so it behaves like a mirror.
-                frame = cv2.flip(frame, 1)
-                rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                mp_image = mp.Image(
-                    image_format=mp.ImageFormat.SRGB,
-                    data=rgb,
-                )
+            with vision.HandLandmarker.create_from_options(options) as detector:
 
-                # VIDEO mode requires timestamps that increase each frame.
-                timestamp_ms = int((time.monotonic() - start_time) * 1000)
-                timestamp_ms = max(timestamp_ms, last_timestamp_ms + 1)
-                last_timestamp_ms = timestamp_ms
+                while True:
 
-                result = detector.detect_for_video(mp_image, timestamp_ms)
+                    ret, frame = cap.read()
 
-                if result.hand_landmarks:
-                    for i, landmarks in enumerate(result.hand_landmarks):
+                    if not ret:
+                        break
+
+                    frame = cv2.flip(frame, 1)
+
+                    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                    mp_image = mp.Image(
+                        image_format=mp.ImageFormat.SRGB,
+                        data=rgb
+                    )
+
+                    timestamp_ms = int(
+                        (time.monotonic() - start_time) * 1000
+                    )
+                    timestamp_ms = max(
+                        timestamp_ms,
+                        last_timestamp_ms + 1
+                    )
+
+                    last_timestamp_ms = timestamp_ms
+
+                    result = detector.detect_for_video(
+                        mp_image,
+                        timestamp_ms
+                    )
+
+                    current_gesture = "NONE"
+
+                    if result.hand_landmarks:
+
+                        landmarks = result.hand_landmarks[0]
+
                         handedness = "Unknown"
-                        if i < len(result.handedness) and result.handedness[i]:
-                            handedness = result.handedness[i][0].category_name
+
+                        if result.handedness[0]:
+                            handedness = (
+                                result.handedness[0][0].category_name
+                            )
 
                         draw_hand(frame, landmarks)
 
-                        fingers = count_fingers(landmarks, handedness)
+                        fingers = count_fingers(
+                            landmarks,
+                            handedness
+                        )
+
                         gesture = recognize_gesture(fingers)
 
-                        wrist_x = int(landmarks[0].x * frame.shape[1])
-                        wrist_y = int(landmarks[0].y * frame.shape[0])
-                        label = f"{handedness}: {gesture}"
+                        current_gesture = (
+                            f"{handedness}|{gesture}"
+                        )
+
+                        wrist_x = int(
+                            landmarks[0].x * frame.shape[1]
+                        )
+
+                        wrist_y = int(
+                            landmarks[0].y * frame.shape[0]
+                        )
 
                         cv2.putText(
                             frame,
-                            label,
+                            f"{handedness}: {gesture}",
                             (max(10, wrist_x - 70), max(25, wrist_y - 20)),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             0.6,
                             (0, 220, 80),
                             2,
-                            cv2.LINE_AA,
+                            cv2.LINE_AA
                         )
 
-                        extended = [
-                            name
-                            for name, is_extended in zip(FINGER_NAMES, fingers)
-                            if is_extended
-                        ]
-                        print(
-                            f"\r{handedness} hand | Gesture: {gesture:<24} "
-                            f"| Extended: {', '.join(extended) or 'none'}",
-                            end="",
-                            flush=True,
-                        )
+                    # send when gesture changes
+                    if current_gesture != last_sent_gesture:
 
-                cv2.putText(
-                    frame,
-                    "Q / Esc: quit",
-                    (10, frame.shape[0] - 15),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (255, 255, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
-                cv2.imshow("Hand Gesture Recognition", frame)
+                        message = f"gesture:{current_gesture}\n"
 
-                key = cv2.waitKey(1) & 0xFF
-                if key in (ord("q"), ord("Q"), 27):
-                    break
+                        client_socket.sendall(message.encode())
+
+                        print(f"Sent: {message.strip()}")
+
+                        last_sent_gesture = current_gesture
+
+                    cv2.putText(
+                        frame,
+                        "Q / Esc: quit",
+                        (10, frame.shape[0] - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        (255, 255, 255),
+                        1,
+                        cv2.LINE_AA
+                    )
+
+                    cv2.imshow(
+                        "Hand Gesture Recognition",
+                        frame
+                    )
+
+                    key = cv2.waitKey(1) & 0xFF
+
+                    if key in (ord("q"), ord("Q"), 27):
+                        break
+
     finally:
         cap.release()
         cv2.destroyAllWindows()
-
-    print("\nHand recognition stopped.")
 
 
 if __name__ == "__main__":

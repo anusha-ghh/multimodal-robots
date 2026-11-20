@@ -1,8 +1,13 @@
-import socket, threading, time
+import json
+import socket, threading, time, queue
 
 HOST = "127.0.0.1" # localhost
 PORT = 7777
 
+COMMAND_HOST = "127.0.0.1"
+COMMAND_PORT = 10001
+GESTURE_HOLD_TIME = 1.0
+NON_BLOCKING_COMMANDS = {"go_to", "rotate"}
 
 class Server:
 
@@ -10,8 +15,17 @@ class Server:
                 self._voice = ""
                 self._gesture = ""
                 self._prev_gesture = None
+                self._prev_gesture = None
                 self._gesture_time_start = None
                 self._lock = threading.Lock()
+                self._last_processed = None
+
+                # queue for blocking commands
+                self._command_queue = queue.Queue()
+
+                threading.Thread(
+                        target=self.command_worker,
+                        daemon=True).start()
 
         def check_inputs(self):
                 while True:
@@ -30,7 +44,7 @@ class Server:
                                 return
 
                         duration = time.monotonic() - self._gesture_time_start
-                            
+
                         # at least 1 second.
                         if duration < GESTURE_HOLD_TIME:
                                 return
@@ -46,19 +60,81 @@ class Server:
                                 self._gesture
                                 ):
 
-                                print("\n--- MATCH FOUND ---")
-                                print(f"Voice: {self._voice}")
-                                print(f"Gesture: {self._gesture}")
-                                print(f"Gesture duration: {duration:.2f}s\n")
-                                                                                    
+                                command = self.get_command(
+                                        self._voice,
+                                        self._gesture
+                                )
+
+                                if command is not None:
+
+                                        print("\n--- MATCH FOUND ---")
+                                        print(f"Voice: {self._voice}")
+                                        print(f"Gesture: {self._gesture}")
+                                        print(f"Command: {command}")
+                                        print(f"Gesture duration: {duration:.2f}s\n")
+
+                                        self.submit_command(command)
 
                         self._last_processed = current_pair
                         self._voice = ""
 
+        def get_command(self, voice, gesture):
+
+                # REPLACE THIS WITH TRAINING
+                command_map = {
+                        ("scan for", "Point"): "scan_for",
+                        ("rotate", "Peace"): "rotate",
+                        ("go to", "Point"): "go_to",
+                        ("speak", "Open palm"): "speak",
+                        ("play music", "Pinky"): "play_music",
+                        ("increase", "Thumbs up"): "increase_volume",
+                        ("decrease", "Fist"): "decrease_volume"
+                }
+
+                return command_map.get((voice.lower(), gesture))
+
+        def submit_command(self, command):
+                # non-blocking commands
+                if command in NON_BLOCKING_COMMANDS:
+                        threading.Thread(
+                                target=self.send_command,
+                                args=(command,),
+                                daemon=True).start()
+
+                # everything else goes into queue
+                else:
+                        self._command_queue.put(command)
+
+        def command_worker(self):
+                while True:
+                        command = self._command_queue.get()
+
+                        try:
+                                self.send_command(command)
+
+                        finally:
+                                self._command_queue.task_done()
+
+        def send_command(self, command):
+                try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as client:
+                                print(f"Sent command: {command}")
+                                client.connect((COMMAND_HOST, COMMAND_PORT))
+
+                                client.sendall((command + "\n").encode("utf-8"))
+                                response = client.recv(1024).decode("utf-8")
+                                print(f"Robot response: {response}", flush=True)
+
+                except ConnectionRefusedError:
+                        print("Command server is not running.")
+
+                except Exception as e:
+                        print(f"Error sending command: {e}")
+
         def handle_client(self, conn, addr):
                 buffer = ""
                 new_gesture = "NONE"
-                
+
                 try:
                         while True:
                                 data = conn.recv(1024)
@@ -76,23 +152,23 @@ class Server:
 
                                         with self._lock:
                                                 if message.startswith("voice:"):
-                                                        self._voice = message[6:].strip()
+                                                        self._voice = message[6:].strip().lower()
                                                 elif message.startswith("gesture:"):
                                                         new_gesture = message[8:].strip()
 
-                                                if new_gesture != self._gesture:
-                                                        self._gesture = new_gesture
+                                                        if new_gesture != self._gesture:
+                                                                self._gesture = new_gesture
 
-                                                if new_gesture == "NONE":
-                                                        self._gesture_start = None
+                                                                if new_gesture == "NONE":
+                                                                        self._gesture_time_start = None
 
-                                                else:
-                                                        self._gesture_start = time.monotonic()
+                                                                else:
+                                                                        self._gesture_time_start = time.monotonic()
 
-                                                self._last_processed = None
+                                                                self._last_processed = None
 
                                         self.process_inputs()
-                                        
+
                 except ConnectionResetError:
                         print(f"Client has disconnected.")
 

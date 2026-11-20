@@ -3,7 +3,7 @@ import speech_recognition as sr
 
 HOST = '127.0.0.1' # localhost
 PORT = 7777        # port
-COMMANDS = ["play music", "increase", "decrease", "go to", "approach"]
+COMMANDS = ["god", "play music", "rotate", "increase", "decrease", "go to", "approach"]
 
 def is_command(text):
 	for command in COMMANDS:
@@ -54,7 +54,7 @@ def send_info_server():
 			if is_command(message):
 				message = "voice:" + message + "\n"
 				client_socket.sendall(message.encode())# send
-				data = client_socket.recv(1024)  # response
+				#data = client_socket.recv(1024)  # response
 	print("Voice disconnected.")
 
 
